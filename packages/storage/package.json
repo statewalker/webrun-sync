@@ -18,6 +18,9 @@
     "test": "vitest run --passWithNoTests",
     "lint": "biome lint src tests"
   },
+  "dependencies": {
+    "@webrun-vcs/diff": "workspace:*"
+  },
   "devDependencies": {
     "rolldown": "catalog:",
     "vitest": "catalog:",
