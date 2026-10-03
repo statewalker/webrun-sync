@@ -11,7 +11,7 @@
  * - After a fully-clean `bisync`, a fresh anchor is written from the merged state.
  */
 
-import type { FilesApi } from "@statewalker/webrun-files";
+import type { FilesApi, FileStats } from "@statewalker/webrun-files";
 import { buildAnchor } from "./anchor.js";
 import { createStreamingTransfer } from "./transfer.js";
 import type {
@@ -44,7 +44,12 @@ async function verifyCopy(
   // "size" (default) and "mtime" — cross-endpoint mtime is not comparable, so
   // both settle on the byte-count check.
   const [s, d] = await Promise.all([source.stats(path), dest.stats(path)]);
-  return !!s && !!d && s.size === d.size;
+  return !!s && !!d && sizeOf(s) === sizeOf(d);
+}
+
+/** Byte length of a file; `undefined` for a directory (two directories compare equal). */
+function sizeOf(stats: FileStats): number | undefined {
+  return stats.kind === "file" ? stats.size : undefined;
 }
 
 interface Outcome {

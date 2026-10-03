@@ -46,7 +46,7 @@ export function filesBlobStore(files: FilesApi, opts?: FilesBlobStoreOptions): B
     },
     async size(id) {
       const stats = await files.stats(pathFor(id));
-      return stats?.size ?? -1;
+      return stats?.kind === "file" ? stats.size : -1;
     },
     async remove(id) {
       return files.remove(pathFor(id));

@@ -31,8 +31,8 @@ export async function snapshot(files: FilesApi, filter?: PathFilter): Promise<Sn
     map.set(info.path, {
       path: info.path,
       kind: info.kind,
-      size: info.size,
-      mtime: info.lastModified,
+      size: info.kind === "file" ? info.size : undefined,
+      mtime: info.kind === "file" ? info.lastModified : undefined,
     });
   }
   return map;
