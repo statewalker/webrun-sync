@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "@statewalker/webrun-files": "catalog:",
-    "@statewalker/storage": "workspace:*"
+    "@statewalker/storage": "workspace:^"
   },
   "devDependencies": {
     "@statewalker/webrun-files-mem": "catalog:",
