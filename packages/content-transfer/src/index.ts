@@ -11,8 +11,8 @@
  * resumable. It knows nothing of git, LFS, or sync.
  */
 
-export { chunkTransfer } from "./chunk-transfer.js";
 export type { FileSyncAction, FileTransfer } from "./chunk-transfer.js";
+export { chunkTransfer } from "./chunk-transfer.js";
 export { remoteStore } from "./remote-store.js";
 export { serveStore } from "./serve-store.js";
 export { transfer } from "./transfer.js";

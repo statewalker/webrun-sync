@@ -129,7 +129,9 @@ function fateOf(baseNode: Node, side: Snapshot, renames: Map<string, string>): F
   if (!sideNode) return { t: "deleted" };
   if (sideNode.kind !== baseNode.kind) return { t: "typechange", kind: sideNode.kind };
   if (baseNode.kind === "directory") return { t: "unchanged" };
-  return sideNode.hash === baseNode.hash ? { t: "unchanged" } : { t: "modified", hash: sideNode.hash as string };
+  return sideNode.hash === baseNode.hash
+    ? { t: "unchanged" }
+    : { t: "modified", hash: sideNode.hash as string };
 }
 
 export async function merge(

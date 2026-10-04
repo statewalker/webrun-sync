@@ -17,7 +17,11 @@ function toLines(bytes: Uint8Array | undefined): string[] {
 export function createTextContentMerger(): ContentMerger {
   return {
     merge(input: ContentMergeInput): ContentMergeOutput {
-      const res = threeWayMergeLines(toLines(input.base), toLines(input.left), toLines(input.right));
+      const res = threeWayMergeLines(
+        toLines(input.base),
+        toLines(input.left),
+        toLines(input.right),
+      );
       if (!res.ok || !res.lines) return { conflict: true };
       return { conflict: false, merged: encoder.encode(res.lines.join("\n")) };
     },

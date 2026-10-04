@@ -8,7 +8,7 @@
 
 import type { ContentStore } from "@statewalker/content-store";
 import type { Duplex } from "@statewalker/webrun-streams";
-import { frameMessage, readFrame, type Request } from "./protocol.js";
+import { frameMessage, type Request, readFrame } from "./protocol.js";
 import { registerManifest } from "./transfer.js";
 
 const PROTOCOL = "content-transfer/1";

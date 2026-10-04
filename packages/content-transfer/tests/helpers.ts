@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { createContentStore } from "@statewalker/content-store";
 import type { ByteStream, ChunkId, ContentStore, ObjectId } from "@statewalker/content-store";
+import { createContentStore } from "@statewalker/content-store";
 import { memBlobStore } from "@statewalker/storage";
 
 /** SHA-256 hex over a byte stream, prefixed — the injected `hashContent`. */

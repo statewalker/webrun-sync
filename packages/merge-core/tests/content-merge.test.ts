@@ -36,7 +36,15 @@ describe("content merge", () => {
 
     const { operations, conflicts } = await merge(base, left, right, { hashContent: sha256 });
     expect(operations).toEqual([]);
-    expect(conflicts).toEqual([{ kind: "content", path: "/b.bin", base: expect.anything(), left: expect.anything(), right: expect.anything() }]);
+    expect(conflicts).toEqual([
+      {
+        kind: "content",
+        path: "/b.bin",
+        base: expect.anything(),
+        left: expect.anything(),
+        right: expect.anything(),
+      },
+    ]);
   });
 
   it("treats files above textMergeMaxBytes as hash-compare only", async () => {

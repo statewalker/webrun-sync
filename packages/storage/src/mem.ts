@@ -38,10 +38,7 @@ export function memBlobStore(): BlobStore {
  * Return the `[start, end)` slice of a chunk list (end exclusive, start default
  * 0, end default total length) as a new chunk list — mirrors RawStorage.load.
  */
-function sliceChunks(
-  chunks: Uint8Array[],
-  range: { start?: number; end?: number },
-): Uint8Array[] {
+function sliceChunks(chunks: Uint8Array[], range: { start?: number; end?: number }): Uint8Array[] {
   const start = range.start ?? 0;
   const total = chunks.reduce((n, c) => n + c.length, 0);
   const end = range.end ?? total;

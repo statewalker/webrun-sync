@@ -12,7 +12,7 @@
 import type { Resolution, Conflict as SyncConflict } from "@statewalker/merge-core";
 import type { FilesApi } from "@statewalker/webrun-files";
 
-export type { FilesApi, SyncConflict, Resolution };
+export type { FilesApi, Resolution, SyncConflict };
 
 /** A stream of bytes, as produced by {@link FilesApi.read}. */
 export type ByteStream = AsyncIterable<Uint8Array>;

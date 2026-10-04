@@ -8,10 +8,6 @@ export default defineConfig({
     entryFileNames: "[name].js",
     chunkFileNames: "[name]-[hash].js",
   },
-  external: [
-    "@statewalker/webrun-files",
-    /^@statewalker\/webrun-files\//,
-    "@statewalker/storage",
-  ],
+  external: ["@statewalker/webrun-files", /^@statewalker\/webrun-files\//, "@statewalker/storage"],
   treeshake: true,
 });

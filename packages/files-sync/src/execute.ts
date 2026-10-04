@@ -11,7 +11,7 @@
  * - After a fully-clean `bisync`, a fresh anchor is written from the merged state.
  */
 
-import type { FilesApi, FileStats } from "@statewalker/webrun-files";
+import type { FileStats, FilesApi } from "@statewalker/webrun-files";
 import { buildAnchor } from "./anchor.js";
 import { createStreamingTransfer } from "./transfer.js";
 import type {

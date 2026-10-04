@@ -54,7 +54,11 @@ describe("conflict taxonomy", () => {
     const { operations, conflicts } = await merge(base, left, right, { hashContent: sha256 });
     expect(operations).toEqual([]);
     expect(conflicts).toHaveLength(1);
-    expect(conflicts[0]).toMatchObject({ kind: "rename-modify", path: "/f.txt", paths: ["/moved.txt"] });
+    expect(conflicts[0]).toMatchObject({
+      kind: "rename-modify",
+      path: "/f.txt",
+      paths: ["/moved.txt"],
+    });
   });
 
   it("modify-delete: one side edits, the other deletes", async () => {
@@ -86,7 +90,9 @@ describe("conflict taxonomy", () => {
 
     const { operations, conflicts } = await merge(base, left, right, { hashContent: sha256 });
     expect(conflicts).toEqual([]);
-    expect(operations).toEqual([{ op: "add", path: "/n.txt", kind: "file", source: { side: "left", path: "/n.txt" } }]);
+    expect(operations).toEqual([
+      { op: "add", path: "/n.txt", kind: "file", source: { side: "left", path: "/n.txt" } },
+    ]);
   });
 
   it("type-change: a path is a file on one side and a directory on the other", async () => {

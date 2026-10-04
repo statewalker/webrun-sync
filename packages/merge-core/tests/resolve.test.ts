@@ -14,7 +14,16 @@ describe("injected resolve", () => {
       // Resolve only /a.txt (take left); leave /b.txt unresolved.
       resolve: (c) =>
         c.path === "/a.txt"
-          ? { operations: [{ op: "modify", path: c.path, kind: "file", source: { side: "left", path: c.path } }] }
+          ? {
+              operations: [
+                {
+                  op: "modify",
+                  path: c.path,
+                  kind: "file",
+                  source: { side: "left", path: c.path },
+                },
+              ],
+            }
           : undefined,
     });
 
