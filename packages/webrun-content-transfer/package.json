@@ -2,10 +2,14 @@
   "name": "@statewalker/webrun-content-transfer",
   "version": "0.2.2",
   "description": "Resumable, chunk-aware content transfer over webrun-streams",
+  "bugs": {
+    "url": "https://github.com/statewalker/webrun-sync/issues"
+  },
+  "homepage": "https://github.com/statewalker/webrun-sync/tree/main/packages/webrun-content-transfer#readme",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/statewalker/webrun-vcs.git",
+    "url": "git+https://github.com/statewalker/webrun-sync.git",
     "directory": "packages/webrun-content-transfer"
   },
   "private": false,
