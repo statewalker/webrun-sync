@@ -1,0 +1,54 @@
+{
+  "name": "@statewalker/webrun-content-transfer",
+  "version": "0.2.2",
+  "description": "Resumable, chunk-aware content transfer over webrun-streams",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/statewalker/webrun-vcs.git",
+    "directory": "packages/webrun-content-transfer"
+  },
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && rolldown -c && tsc --emitDeclarationOnly --declaration",
+    "test": "vitest run",
+    "lint": "biome check --write .",
+    "lint:check": "biome check .",
+    "lint:fix": "biome check --write --unsafe .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "format:fix": "biome check --write --unsafe .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@statewalker/webrun-files": "catalog:",
+    "@statewalker/webrun-content-store": "workspace:^",
+    "@statewalker/webrun-streams": "catalog:"
+  },
+  "devDependencies": {
+    "@statewalker/webrun-storage": "workspace:^",
+    "@statewalker/webrun-files-mem": "catalog:",
+    "@statewalker/webrun-files-sync": "workspace:^",
+    "rolldown": "catalog:",
+    "vitest": "catalog:",
+    "typescript": "catalog:",
+    "@types/node": "catalog:"
+  }
+}
