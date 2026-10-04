@@ -54,14 +54,14 @@ importers:
         specifier: 'catalog:'
         version: 5.0.3(@types/node@26.6.4)(vite@8.3.2(@types/node@26.6.4)(yaml@2.9.1))
 
-  packages/content-store:
+  packages/webrun-content-store:
     dependencies:
-      '@statewalker/storage':
-        specifier: workspace:^
-        version: link:../storage
       '@statewalker/webrun-files':
         specifier: 'catalog:'
         version: 0.10.1
+      '@statewalker/webrun-storage':
+        specifier: workspace:^
+        version: link:../webrun-storage
     devDependencies:
       '@statewalker/webrun-files-mem':
         specifier: 'catalog:'
@@ -79,11 +79,11 @@ importers:
         specifier: 'catalog:'
         version: 5.0.3(@types/node@26.6.4)(vite@8.3.2(@types/node@26.6.4)(yaml@2.9.1))
 
-  packages/content-transfer:
+  packages/webrun-content-transfer:
     dependencies:
-      '@statewalker/content-store':
+      '@statewalker/webrun-content-store':
         specifier: workspace:^
-        version: link:../content-store
+        version: link:../webrun-content-store
       '@statewalker/webrun-files':
         specifier: 'catalog:'
         version: 0.10.1
@@ -91,12 +91,37 @@ importers:
         specifier: 'catalog:'
         version: 0.2.1
     devDependencies:
-      '@statewalker/files-sync':
+      '@statewalker/webrun-files-mem':
+        specifier: 'catalog:'
+        version: 0.10.2
+      '@statewalker/webrun-files-sync':
         specifier: workspace:^
-        version: link:../files-sync
-      '@statewalker/storage':
+        version: link:../webrun-files-sync
+      '@statewalker/webrun-storage':
         specifier: workspace:^
-        version: link:../storage
+        version: link:../webrun-storage
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.6.4
+      rolldown:
+        specifier: 'catalog:'
+        version: 1.2.12
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.3(@types/node@26.6.4)(vite@8.3.2(@types/node@26.6.4)(yaml@2.9.1))
+
+  packages/webrun-files-sync:
+    dependencies:
+      '@statewalker/webrun-files':
+        specifier: 'catalog:'
+        version: 0.10.1
+      '@statewalker/webrun-merge':
+        specifier: workspace:^
+        version: link:../webrun-merge
+    devDependencies:
       '@statewalker/webrun-files-mem':
         specifier: 'catalog:'
         version: 0.10.2
@@ -113,11 +138,8 @@ importers:
         specifier: 'catalog:'
         version: 5.0.3(@types/node@26.6.4)(vite@8.3.2(@types/node@26.6.4)(yaml@2.9.1))
 
-  packages/files-sync:
+  packages/webrun-merge:
     dependencies:
-      '@statewalker/merge-core':
-        specifier: workspace:^
-        version: link:../merge-core
       '@statewalker/webrun-files':
         specifier: 'catalog:'
         version: 0.10.1
@@ -138,29 +160,7 @@ importers:
         specifier: 'catalog:'
         version: 5.0.3(@types/node@26.6.4)(vite@8.3.2(@types/node@26.6.4)(yaml@2.9.1))
 
-  packages/merge-core:
-    dependencies:
-      '@statewalker/webrun-files':
-        specifier: 'catalog:'
-        version: 0.10.1
-    devDependencies:
-      '@statewalker/webrun-files-mem':
-        specifier: 'catalog:'
-        version: 0.10.2
-      '@types/node':
-        specifier: 'catalog:'
-        version: 26.6.4
-      rolldown:
-        specifier: 'catalog:'
-        version: 1.2.12
-      typescript:
-        specifier: 'catalog:'
-        version: 7.0.2
-      vitest:
-        specifier: 'catalog:'
-        version: 5.0.3(@types/node@26.6.4)(vite@8.3.2(@types/node@26.6.4)(yaml@2.9.1))
-
-  packages/storage:
+  packages/webrun-storage:
     dependencies:
       '@statewalker/webrun-files':
         specifier: 'catalog:'

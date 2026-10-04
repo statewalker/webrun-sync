@@ -2,16 +2,16 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "paths": {
-      "@statewalker/storage": ["packages/storage/src"],
-      "@statewalker/storage/*": ["packages/storage/src/*"],
-      "@statewalker/content-store": ["packages/content-store/src"],
-      "@statewalker/content-store/*": ["packages/content-store/src/*"],
-      "@statewalker/content-transfer": ["packages/content-transfer/src"],
-      "@statewalker/content-transfer/*": ["packages/content-transfer/src/*"],
-      "@statewalker/merge-core": ["packages/merge-core/src"],
-      "@statewalker/merge-core/*": ["packages/merge-core/src/*"],
-      "@statewalker/files-sync": ["packages/files-sync/src"],
-      "@statewalker/files-sync/*": ["packages/files-sync/src/*"]
+      "@statewalker/webrun-storage": ["packages/webrun-storage/src"],
+      "@statewalker/webrun-storage/*": ["packages/webrun-storage/src/*"],
+      "@statewalker/webrun-content-store": ["packages/webrun-content-store/src"],
+      "@statewalker/webrun-content-store/*": ["packages/webrun-content-store/src/*"],
+      "@statewalker/webrun-content-transfer": ["packages/webrun-content-transfer/src"],
+      "@statewalker/webrun-content-transfer/*": ["packages/webrun-content-transfer/src/*"],
+      "@statewalker/webrun-merge": ["packages/webrun-merge/src"],
+      "@statewalker/webrun-merge/*": ["packages/webrun-merge/src/*"],
+      "@statewalker/webrun-files-sync": ["packages/webrun-files-sync/src"],
+      "@statewalker/webrun-files-sync/*": ["packages/webrun-files-sync/src/*"]
     }
   },
   "include": []
