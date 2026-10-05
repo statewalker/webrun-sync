@@ -1,12 +1,12 @@
 # @statewalker/webrun-files-sync
 
-rclone-like file-synchronisation engine (copy / sync / bisync / move / check) over two `FilesApi` endpoints.
+rclone-like file synchronisation (copy, sync, bisync, move, check) between two `@statewalker/webrun-files` `FilesApi` endpoints.
 
 ## Overview
 
-`files-sync` is Axis A of the two-axis VCS architecture — the git-independent "sync" engine. It **plans, then executes**: `plan(a, b, op, opts)` is pure (mutates neither endpoint) and returns a serializable `SyncPlan`; `execute(plan, a, b, opts)` applies it, emitting events and resuming from an optional checkpoint after interruption. Bidirectional `bisync` is a genuine **three-way merge over a sync-owned `SyncAnchor`** (delegated to `@statewalker/webrun-merge`), never two chained one-way syncs.
+The engine plans first, then executes. `plan(a, b, op, opts)` mutates neither endpoint and returns a serializable `SyncPlan`. `execute(plan, a, b, opts)` applies it, emits events, and can resume from a checkpoint after an interruption. `bisync` is a three-way merge against a stored `SyncAnchor` (the state after the last sync), done by `@statewalker/webrun-merge`; it is not two chained one-way syncs.
 
-It imports **only** `@statewalker/webrun-files` and `@statewalker/webrun-merge` and knows nothing of git or versioning — that is the hard Axis A ✗↔ Axis B ban. Content identity (`hashContent`), the per-copy `Transfer` strategy, and conflict resolution are all injected.
+The package imports only `@statewalker/webrun-files` and `@statewalker/webrun-merge` and knows nothing of git. Content identity (`hashContent`), the per-file `Transfer` strategy and conflict resolution are passed in.
 
 ## Installation
 
@@ -14,7 +14,17 @@ It imports **only** `@statewalker/webrun-files` and `@statewalker/webrun-merge` 
 pnpm add @statewalker/webrun-files-sync
 ```
 
-## Quick Start
+No peer dependencies.
+
+## Entry points
+
+| Import | Contents |
+| --- | --- |
+| `@statewalker/webrun-files-sync` | Everything listed under [API](#api). ESM only, environment-neutral (browser, Node, workers). |
+
+The package ships built JS and `.d.ts` in `dist/` and the TypeScript sources in `src/`.
+
+## Quick start
 
 ```typescript
 import { createHash } from "node:crypto";
@@ -30,30 +40,43 @@ async function sha256(input: AsyncIterable<Uint8Array>): Promise<string> {
 const a = new MemFilesApi({ initialFiles: { "/new.txt": "new", "/changed.txt": "v2" } });
 const b = new MemFilesApi({ initialFiles: { "/changed.txt": "v1", "/extra.txt": "keep" } });
 
-// Pure plan — dry-runnable, serializable, mutates nothing.
+// Plan: serializable, mutates nothing.
 const p = await plan(a, b, "copy", { hashContent: sha256 });
 
 // Execute, streaming per-action events.
 for await (const event of execute(p, a, b, { hashContent: sha256 })) {
   if (event.type === "done") console.log("synced", event.action);
 }
-// b now has new.txt + updated changed.txt; extra.txt is kept (copy never deletes).
+// b now has new.txt and the updated changed.txt; extra.txt is kept (copy never deletes).
 ```
 
 ## API
 
-- **`plan(a, b, op, opts): Promise<SyncPlan>`** — pure planner. `op` is `"copy" | "sync" | "bisync" | "move" | "check"`. `copy` never deletes destination files; `sync` deletes extraneous ones; `move` is copy+verify+delete; `check` compares only; `bisync` runs the 3-way merge.
-- **`execute(plan, a, b, opts): AsyncIterable<SyncEvent>`** — applies a plan, verifying each action and skipping already-completed indices from `opts.checkpoint`.
-- **`buildAnchor(...)`** — build a `SyncAnchor` (bisync base) from an endpoint.
-- **`snapshot(files, filter?)` / `isChanged(...)`** — the change-detection ladder primitives.
-- **`createStreamingTransfer(): Transfer`** — the default whole-file streaming copy executor.
+- **`plan(a, b, op, opts): Promise<SyncPlan>`**: `op` is `"copy" | "sync" | "bisync" | "move" | "check"`. `copy` never deletes destination files; `sync` deletes extra ones; `move` is copy, verify, delete; `check` only compares; `bisync` runs the three-way merge.
+- **`execute(plan, a, b, opts): AsyncIterable<SyncEvent>`**: applies a plan, verifies each action (default `verify: "size"`), and skips action indices already recorded in `opts.checkpoint`. Events: `warning`, `conflict`, `start`, `done`, `skipped`, `failed`.
+- **`buildAnchor(files, hashContent): Promise<SyncAnchor>`**: builds a bisync anchor from an endpoint.
+- **`snapshot(files, filter?)`** and **`isChanged(from, to, path, fromEntry, toEntry, opts)`**: the change-detection primitives.
+- **`createStreamingTransfer(): Transfer`**: the default whole-file streaming copy.
 
-`SyncOptions` carries the required `hashContent`, plus optional `filter`, `transfer`, `verify` (`VerificationMode`), `anchorStore` / `pairKey` (bisync), `resolve`, `quickFingerprint`, and `checkpoint`. Types: `SyncPlan`, `SyncAction`, `SyncConflict`, `SyncEvent`, `SyncAnchor`, `AnchorStore`, `CheckpointStore`, `Transfer`.
+`SyncOptions`:
+
+- `hashContent` (required).
+- `filter?`: `(path) => boolean`.
+- `transfer?`: a `Transfer` (default: `createStreamingTransfer()`).
+- `verify?`: `VerificationMode` (`size`, `mtime`, `backend-hash`, `content-hash`, `read-after-write`).
+- `anchorStore?`, `pairKey?` (default `"default"`): where bisync reads and writes its anchor.
+- `resolve?`: conflict resolver.
+- `quickFingerprint?`: enables the quick-fingerprint step of change detection.
+- `checkpoint?`: a `CheckpointStore` for resumable execution.
+
+Types: `SyncPlan`, `SyncAction`, `SyncConflict`, `SyncEvent`, `SyncOp`, `SyncAnchor`, `AnchorStore`, `CheckpointStore`, `Transfer`, `PathFilter`, `VerificationMode`, `Resolution`, `FilesApi`, `ByteStream`.
 
 ## Notes
 
-- **Plan-then-execute + resumable.** Plans are serializable and auditable; `execute` records each completed action index, so an interrupted run resumes with no duplicate work.
-- **Cheap-first change detection.** A short-circuiting ladder (path/type → size → stable mtime → optional quick fingerprint → full `hashContent`) avoids hashing byte-identical files.
-- **Injected `Transfer` seam.** The default streams whole files; a chunk-dedup transfer (from `@statewalker/webrun-content-transfer`) plugs into the *same* seam with no rewrite.
-- **bisync = 3-way over an anchor** via `@statewalker/webrun-merge`, using the same injected content id — not two one-way syncs.
-- Built red/green TDD.
+- **Resumable.** `execute` records each completed action index, so an interrupted run resumes without repeating work.
+- **Cheap checks first.** Change detection goes path/type, size, stable mtime, optional quick fingerprint, then full `hashContent`, and stops at the first decisive step.
+- **Pluggable transfer.** The default copies whole files. `chunkTransfer` from `@statewalker/webrun-content-transfer` plugs into the same `transfer` option and moves only missing chunks.
+
+## License
+
+MIT

@@ -4,9 +4,9 @@ Domain-neutral byte-persistence seam: an immutable content-addressed `BlobStore`
 
 ## Overview
 
-`storage` is the persistence seam both axes of the two-axis VCS architecture plug into. It defines two small low-level primitives — a `BlobStore` (immutable, keyed by a caller-supplied id, with ranged reads and byte `size`) and a `KvStore` (mutable, keyed, with an atomic `cas`) — plus a thin typed `RefStore` facade over the KV primitive. It stores bytes and nothing more: it knows nothing of git objects, chunks, or hashing algorithms (**the caller owns every id**).
+This package defines two small primitives and one facade. A `BlobStore` is immutable and keyed by a caller-supplied id; it supports ranged reads and reports byte `size`. A `KvStore` is mutable and keyed, with an atomic `cas`. `RefStore` is a typed string facade over a `KvStore`. The package stores bytes only. It knows nothing of git objects, chunks or hashing: the caller owns every id.
 
-Adapters implement the two primitives over different backends; `content-store` and `vcs-core` ride on top. This package ships an in-memory adapter and a `FilesApi`-backed adapter; SQL / KV backends are separate adapters over the same interfaces.
+It ships an in-memory adapter and an adapter over any `@statewalker/webrun-files` `FilesApi`. `@statewalker/webrun-content-store` and `@statewalker/vcs-core` build on it.
 
 ## Installation
 
@@ -14,21 +14,31 @@ Adapters implement the two primitives over different backends; `content-store` a
 pnpm add @statewalker/webrun-storage
 ```
 
-## Quick Start
+No peer dependencies. Depends on `@statewalker/webrun-files` (types and the `FilesApi` contract).
+
+## Entry points
+
+| Import | Contents |
+| --- | --- |
+| `@statewalker/webrun-storage` | Everything listed under [API](#api). ESM only, environment-neutral (browser, Node, workers). |
+
+The package ships built JS and `.d.ts` in `dist/` and the TypeScript sources in `src/`.
+
+## Quick start
 
 ```typescript
 import { MemFilesApi } from "@statewalker/webrun-files-mem";
 import { filesBlobStore, memBlobStore, memKvStore, refStore } from "@statewalker/webrun-storage";
 
-// Immutable, content-addressed blobs (in-memory, or over any FilesApi):
+// Immutable, content-addressed blobs (in memory, or over any FilesApi):
 const blobs = memBlobStore();
-const overFiles = filesBlobStore(new MemFilesApi());
+const overFiles = filesBlobStore(new MemFilesApi(), { root: "/objects" });
 
 async function* streamOf(...parts: string[]) {
   for (const p of parts) yield new TextEncoder().encode(p);
 }
 
-await blobs.put("a1", streamOf("hello ", "world")); // caller owns the id
+await blobs.put("a1", streamOf("hello ", "world")); // the caller owns the id
 await blobs.has("a1"); // true
 await blobs.size("a1"); // 11, or -1 if absent
 const tail = blobs.get("a1", { start: 6 }); // ranged read -> "world"
@@ -44,15 +54,19 @@ const id = await refs.read("refs/heads/main"); // "commit-1"
 
 ## API
 
-- **`BlobStore`** — `put(id, bytes, opts?)` (streaming, bounded-memory; `opts.verify` re-derives and checks the id), `get(id, range?)` with `{ start?, end? }` (end exclusive), `has(id)`, `remove(id)`, `size(id)` (`-1` when absent), `list(prefix?)`. Re-putting the same id is idempotent. `ObjectStore` is an alias.
-- **`KvStore`** — `get` / `put` / `remove` / `list`, plus `cas(key, expected, next)` (writes and returns `true` only if the current value deep-equals `expected`; `next === undefined` deletes).
-- **`RefStore`** — thin string-id facade over a `KvStore`: `read`, `compareAndSet`, `list`.
-
-**Adapters & facade:** `memBlobStore()`, `memKvStore()`, `filesBlobStore(files, opts?)`, `refStore(kv)`.
+- **`BlobStore`**: `put(id, bytes, opts?)` (streaming; `opts.verify` re-derives the id from the bytes and rejects on mismatch), `get(id, range?)` with `{ start?, end? }` (`end` exclusive; empty stream if absent), `has(id)`, `remove(id)`, `size(id)` (`-1` when absent), `list(prefix?)`. Re-putting the same id is idempotent. `ObjectStore` is an alias.
+- **`KvStore`**: `get`, `put`, `remove`, `list(prefix?)`, plus `cas(key, expected, next)`. `cas` writes and returns `true` only if the current value equals `expected` byte by byte; `next === undefined` deletes.
+- **`RefStore`**: string-id facade over a `KvStore`: `read`, `compareAndSet`, `list`.
+- **Adapters and facade**: `memBlobStore()`, `memKvStore()`, `filesBlobStore(files, opts?)` (`opts.root`, default `/`; blobs are stored at `<root>/<id[0..2]>/<id[2..]>`), `refStore(kv)`.
+- Types: `BlobStore`, `KvStore`, `RefStore`, `ObjectStore`, `ByteStream`, `FilesBlobStoreOptions`.
 
 ## Notes
 
-- **Hash-agnostic.** `put(id, …)` takes the id from the caller — `content-store` hashes chunks, `vcs-core` computes git object ids. Optional integrity verification is a caller-injected `verify` on `put`.
-- **CAS is a required primitive** so `RefStore` always gets atomic compare-and-set with no per-consumer branching.
-- **One backend object per blob;** packing/CDC-grouping lives in the layers above (`vcs-core` packfiles, `content-store` chunks).
-- The same behavioural suite runs against every adapter (mem and files), and the seam is bounded-memory by construction. Built red/green TDD.
+- **Hash-agnostic.** `put(id, ...)` takes the id from the caller. `webrun-content-store` hashes chunks; `vcs-core` computes git object ids. Integrity checking is an optional caller-supplied `verify` on `put`.
+- **CAS is required**, so `RefStore` always gets atomic compare-and-set.
+- **One backend object per blob.** Packing and chunk grouping live in the layers above.
+- The same behavioural test suite runs against the memory and files adapters.
+
+## License
+
+MIT

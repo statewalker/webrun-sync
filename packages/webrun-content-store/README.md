@@ -4,17 +4,27 @@ Domain-neutral, content-addressed large-object store with content-defined chunki
 
 ## Overview
 
-`content-store` persists large byte streams as deduplicated, content-defined chunks over the `@statewalker/webrun-storage` `BlobStore` seam. It is **algorithm-agnostic**: the whole-object and per-chunk identities are computed by an **injected `hashContent`**, and every id is treated as an opaque string (it carries whatever prefix the hasher produces). The content-defined chunker lives in-package; content below a threshold is stored as a single direct blob.
+`webrun-content-store` stores large byte streams as deduplicated, content-defined chunks over the `@statewalker/webrun-storage` `BlobStore`. Object and chunk ids are computed by a `hashContent` function you pass in, and every id is treated as an opaque string (it carries whatever prefix your hasher produces). Content below a size threshold is stored as one blob without chunking.
 
-It is shared infrastructure for both axes: it backs Axis A's "ask which chunks exist → send only the missing → assemble" transfer flow (via `@statewalker/webrun-content-transfer`) and Axis B's LFS-pointer-to-object indirection (`@statewalker/vcs-transport-lfs` / `-xet`). It knows nothing of git, LFS, SHA-256, commits, or sync — those live in the skins above it.
+It backs the chunk transfer in `@statewalker/webrun-content-transfer` ("which chunks do you have, send only the missing ones, assemble") and the LFS object storage in `@statewalker/vcs-transport-lfs` and `@statewalker/vcs-transport-xet`. It knows nothing of git, LFS, commits or sync.
 
 ## Installation
 
 ```bash
-pnpm add @statewalker/webrun-content-store
+pnpm add @statewalker/webrun-content-store @statewalker/webrun-storage
 ```
 
-## Quick Start
+No peer dependencies. You need a `BlobStore` implementation, for example from `@statewalker/webrun-storage`.
+
+## Entry points
+
+| Import | Contents |
+| --- | --- |
+| `@statewalker/webrun-content-store` | `createContentStore` and the types listed under [API](#api). ESM only, environment-neutral (browser, Node, workers). |
+
+The package ships built JS and `.d.ts` in `dist/` and the TypeScript sources in `src/`.
+
+## Quick start
 
 ```typescript
 import { createHash } from "node:crypto";
@@ -32,37 +42,42 @@ const store = createContentStore(
   { chunkThreshold: 64, cdc: { min: 64, avg: 256, max: 1024 } },
 );
 
-async function* streamOf(bytes: Uint8Array) { yield bytes; }
+async function* streamOf(bytes: Uint8Array) {
+  yield bytes;
+}
+const payload = new Uint8Array(10_000).map((_, i) => i % 251);
 
-// Object level: chunk + hash in one bounded-memory pass.
+// Object level: chunk and hash in one bounded-memory pass.
 const d = await store.put(streamOf(payload)); // ObjectDescriptor { id, size, chunks }
-const whole = store.read(d.id);               // reassembled stream
-const slice = store.read(d.id, { offset: 3000, length: 2500 }); // arbitrary range across chunks
+const whole = store.read(d.id); // reassembled stream
+const slice = store.read(d.id, { offset: 3000, length: 2500 }); // range across chunks
 
-// Chunk level: negotiate and move only what a peer is missing.
+// Chunk level: find out what is missing, move only that.
 const missing = await store.hasChunks(d.chunks.map((c) => c.id)); // ids NOT present
-await store.gc([d.id]); // sweep everything not reachable from the live roots
+await store.gc([d.id]); // remove everything not reachable from the live roots
 ```
 
 ## API
 
-**Object level**
-- `put(content): Promise<ObjectDescriptor>` — chunk + hash in a bounded-memory pass, store chunks + manifest.
-- `read(id, range?)` — stream the object's bytes, optionally sliced by `{ offset?, length? }`; empty stream if absent.
-- `has(id)`, `getManifest(id)`, `remove(id)`.
+`createContentStore(deps, opts?)`:
 
-**Chunk level** (transfer / dedup)
-- `hasChunks(ids): Promise<ChunkId[]>` — return exactly the ids **not** present.
-- `putChunk(id, bytes)`, `getChunk(id)`.
+- `deps`: `{ chunks: BlobStore, manifests: BlobStore, hashContent }`.
+- `opts`: `{ chunkThreshold?, cdc? }`. Defaults: `chunkThreshold` 4096 bytes; `cdc` `{ min: 2048, avg: 8192, max: 32768 }`. Content strictly below the threshold is stored as one blob.
 
-**Maintenance**
-- `gc(liveRoots): Promise<{ removedObjects, removedChunks }>` — mark-sweep from caller-supplied roots.
+The returned `ContentStore`:
 
-**Factory:** `createContentStore(deps, opts?)`, where `deps` is `{ chunks: BlobStore, manifests: BlobStore, hashContent }` and `opts` is `{ chunkThreshold?, cdc? }`. Types: `ContentStore`, `ObjectDescriptor`, `ChunkRef`, `ObjectId`, `ChunkId`, `CdcParams`.
+- Object level: `put(content): Promise<ObjectDescriptor>`, `read(id, range?)` (`{ offset?, length? }`; empty stream if absent), `has(id)`, `getManifest(id)`, `remove(id)`.
+- Chunk level: `hasChunks(ids): Promise<ChunkId[]>` (returns the ids that are **not** present), `putChunk(id, bytes)`, `getChunk(id)`.
+- Maintenance: `gc(liveRoots): Promise<{ removedObjects, removedChunks }>`, a mark-sweep from roots you supply.
+
+Types: `ContentStore`, `ContentStoreDeps`, `ContentStoreOptions`, `ObjectDescriptor`, `ChunkRef`, `ObjectId`, `ChunkId`, `CdcParams`, `ByteStream`.
 
 ## Notes
 
-- **Injected hash, opaque ids.** The contract sketch spoke of intrinsic BLAKE3; the shipped code takes an injected `hashContent` and treats every id as opaque — the store commits to no algorithm, and object/chunk ids simply carry the hasher's own prefix.
-- **CDC + direct-blob threshold.** Content-defined chunking (so dedup survives inserts/shifts) is the default; content strictly below `chunkThreshold` is stored as a single blob with no chunking overhead. `hasChunks`/`getChunk`/`putChunk` let `content-transfer` move only missing chunks.
-- **Immutable + external liveness.** Chunks and objects are immutable and content-addressed; there are no refcounts — `gc(liveRoots)` reaches objects→chunks from caller roots and sweeps the rest.
-- Built red/green TDD.
+- **Injected hash, opaque ids.** The store commits to no algorithm.
+- **Content-defined chunking** keeps deduplication working when bytes are inserted or shifted.
+- **Immutable, no refcounts.** Chunks and objects never change. `gc(liveRoots)` walks objects to chunks from your roots and removes the rest.
+
+## License
+
+MIT

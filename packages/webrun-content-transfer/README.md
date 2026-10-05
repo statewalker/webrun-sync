@@ -1,20 +1,30 @@
 # @statewalker/webrun-content-transfer
 
-Resumable, chunk-aware byte mover over the `@statewalker/webrun-streams` duplex substrate.
+Resumable, chunk-aware byte mover between two content stores, over the `@statewalker/webrun-streams` duplex.
 
 ## Overview
 
-Given the object ids a destination needs, `content-transfer` transfers only the chunks the destination is **missing** from a source `ContentStore` to a destination store, over the domain-neutral `webrun-streams` `Duplex` substrate. It is **symmetric** — either endpoint may be a wire `remoteStore` proxy in front of a `serveStore` handler (upload = remote `to`, download = remote `from`). Every received chunk is verified by re-hash before it is written, and a serializable checkpoint makes an interrupted transfer resumable.
+Given the object ids a destination needs, `transfer` copies only the chunks the destination is **missing** from a source `ContentStore` (see `@statewalker/webrun-content-store`) to a destination store. Either side can be remote: `serveStore` exposes a store as a `webrun-streams` `Duplex` handler, and `remoteStore` wraps a `Duplex` as a store proxy (upload: remote `to`; download: remote `from`). Every received chunk is re-hashed and checked against its id before it is written. A serializable checkpoint lets an interrupted transfer resume.
 
-It is shared infrastructure: the Phase-4 chunk-dedup `Transfer` that plugs into `@statewalker/webrun-files-sync`, and the engine `@statewalker/vcs-transport-xet` wraps as a Git LFS custom transfer agent. It builds on `@statewalker/webrun-content-store` and knows nothing of git, LFS, or sync — it moves opaque chunks between two content stores.
+`chunkTransfer` adapts the mover to the `Transfer` seam of `@statewalker/webrun-files-sync`. `@statewalker/vcs-transport-xet` wraps it as a Git LFS custom transfer agent. The package knows nothing of git, LFS or sync.
 
 ## Installation
 
 ```bash
-pnpm add @statewalker/webrun-content-transfer
+pnpm add @statewalker/webrun-content-transfer @statewalker/webrun-content-store
 ```
 
-## Quick Start
+No peer dependencies. Depends on `@statewalker/webrun-content-store`, `@statewalker/webrun-streams` and `@statewalker/webrun-files`.
+
+## Entry points
+
+| Import | Contents |
+| --- | --- |
+| `@statewalker/webrun-content-transfer` | Everything listed under [API](#api). ESM only, environment-neutral (browser, Node, workers). |
+
+The package ships built JS and `.d.ts` in `dist/` and the TypeScript sources in `src/`.
+
+## Quick start
 
 ```typescript
 import { createHash } from "node:crypto";
@@ -30,40 +40,53 @@ async function sha256(bytes: AsyncIterable<Uint8Array>): Promise<string> {
 const mkStore = () =>
   createContentStore({ chunks: memBlobStore(), manifests: memBlobStore(), hashContent: sha256 });
 
+async function* streamOf(b: Uint8Array) {
+  yield b;
+}
+
 const from = mkStore();
 const to = mkStore();
-async function* streamOf(b: Uint8Array) { yield b; }
-const { id } = await from.put(streamOf(payload));
+const { id } = await from.put(streamOf(new Uint8Array(100_000).map((_, i) => i % 251)));
 
-// Move only the chunks `to` is missing; re-hash-verify each; emit progress.
+// Move only the chunks `to` is missing; each one is re-hashed and verified.
 for await (const event of transfer([id], from, to, { hashContent: sha256 })) {
   if (event.type === "object-done") console.log("done", event.objectId);
 }
-// to.read(id) now reconstructs the identical object.
+// to.read(id) now yields the same bytes.
 ```
 
-For a remote peer, wrap a `webrun-streams` `Duplex`:
+Over a duplex (here both ends run in the same process):
 
 ```typescript
-import { remoteStore, serveStore } from "@statewalker/webrun-content-transfer";
+import { remoteStore, serveStore, transfer } from "@statewalker/webrun-content-transfer";
 
-const handler = serveStore(serverStore);   // server: Duplex handler over a ContentStore
-const remote = remoteStore(clientDuplex);  // client: an AssemblingStore proxy
-await drain(transfer([id], from, remote, { hashContent: sha256 })); // upload to the remote
+const handler = serveStore(serverStore); // server side: a Duplex over a ContentStore
+const remote = remoteStore(handler); // client side: an AssemblingStore proxy over a Duplex
+
+for await (const _ of transfer([id], from, remote, { hashContent: sha256 })) {
+  // upload to the remote store
+}
 ```
+
+In a real deployment, pass `remoteStore` a `Duplex` that reaches the server through a `webrun-streams` transport.
 
 ## API
 
-- **`transfer(objectIds, from, to, opts?): AsyncGenerator<TransferEvent>`** — the mover. Negotiates missing chunks per object, streams them, verifies by re-hash, and assembles. Events: `resumed` / `negotiated` / `chunk-sent` / `object-done`.
-- **`remoteStore(call: Duplex): AssemblingStore`** — client-side proxy `ContentStore` over a duplex (adds `putManifest` / `capabilities`).
-- **`serveStore(store): Duplex`** — server-side handler exposing a `ContentStore` over a duplex.
-- **`chunkTransfer(local, remote): FileTransfer`** — the `files-sync`-shaped `Transfer` adapter.
+- **`transfer(objectIds, from, to, opts?): AsyncGenerator<TransferEvent>`**: negotiates missing chunks per object, streams them, verifies by re-hash, and assembles. Events: `resumed`, `negotiated`, `chunk-sent`, `object-done`.
+- **`remoteStore(call: Duplex): AssemblingStore`**: client-side `ContentStore` proxy over a duplex; adds `putManifest` and `capabilities`.
+- **`serveStore(store): Duplex`**: server-side handler exposing a `ContentStore` over a duplex.
+- **`chunkTransfer(local, remote): FileTransfer`**: an object structurally compatible with the `Transfer` of `@statewalker/webrun-files-sync`. For `copy` and `update` actions it ingests the source file into `local`, moves missing chunks to `remote`, and writes the reassembled bytes to the destination.
 
-`TransferOptions` carries optional `limits` (`TransferLimits`: `concurrency`, `maxBufferedBytes`, `batchSize`), `checkpoint` (`TransferCheckpoint`), and `hashContent`. Types: `AssemblingStore`, `Capabilities`, `TransferEvent`, `HashContent`.
+`TransferOptions`: `limits?` (`TransferLimits`: `concurrency`, `maxBufferedBytes`, `batchSize`), `checkpoint?` (`TransferCheckpoint`: `objectIds`, `done`, `pending`), `hashContent?`.
+
+Types: `AssemblingStore`, `Capabilities`, `HashContent`, `TransferCheckpoint`, `TransferEvent`, `TransferLimits`, `TransferOptions`, `FileTransfer`, `FileSyncAction`.
 
 ## Notes
 
-- **Integrity by re-hash.** The re-hash of a received chunk must equal its id (the same injected `hashContent` both stores use) or the chunk is rejected and the transfer fails loudly.
-- **Resumable + bounded.** A serializable `TransferCheckpoint` (done / pending chunk sets) resumes an interrupted transfer after re-verifying the source still holds every object; the pipeline is bounded by `TransferLimits` + `maxBufferedBytes` backpressure.
-- **Symmetric wire.** `hasChunks` negotiation is batched; the `remoteStore` proxy can `putManifest` so assemble costs only the manifest, not the object's bytes.
-- Built red/green TDD.
+- **Integrity by re-hash.** The re-hash of a received chunk must equal its id (both stores use the same `hashContent`), or the transfer fails.
+- **Resumable and bounded.** A `TransferCheckpoint` resumes an interrupted transfer after checking that the source still holds every object. Memory is bounded by `TransferLimits`.
+- **Batched negotiation.** `hasChunks` calls are batched. The `remoteStore` proxy can `putManifest`, so assembling on the remote side costs only the manifest.
+
+## License
+
+MIT
