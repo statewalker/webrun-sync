@@ -1,20 +1,47 @@
 # @statewalker/webrun-content-store
 
-Domain-neutral, content-addressed large-object store with content-defined chunking and deduplication.
+## What it is
 
-## Overview
+A content-addressed store for large byte streams. It splits content into content-defined chunks,
+stores each distinct chunk once, and keeps a manifest per object listing its chunks. Chunks and
+manifests live in two `BlobStore`s from `@statewalker/webrun-storage`; object and chunk ids come
+from a hash function you supply.
 
-`content-store` persists large byte streams as deduplicated, content-defined chunks over the `@statewalker/webrun-storage` `BlobStore` seam. It is **algorithm-agnostic**: the whole-object and per-chunk identities are computed by an **injected `hashContent`**, and every id is treated as an opaque string (it carries whatever prefix the hasher produces). The content-defined chunker lives in-package; content below a threshold is stored as a single direct blob.
+## Why it exists
 
-It is shared infrastructure for both axes: it backs Axis A's "ask which chunks exist → send only the missing → assemble" transfer flow (via `@statewalker/webrun-content-transfer`) and Axis B's LFS-pointer-to-object indirection (`@statewalker/vcs-transport-lfs` / `-xet`). It knows nothing of git, LFS, SHA-256, commits, or sync — those live in the skins above it.
+Large files are expensive to store twice and to send whole. With content-defined chunking, two
+versions of a file share most of their chunks, so storage grows by the changed region only, and a
+peer that already has most chunks needs only the missing ones. This package provides that chunk
+layer for any domain: it knows nothing of git, LFS or sync, and treats every id as an opaque
+string. `@statewalker/webrun-content-transfer` moves its chunks between stores.
 
-## Installation
+## How to use
 
 ```bash
-pnpm add @statewalker/webrun-content-store
+pnpm add @statewalker/webrun-content-store @statewalker/webrun-storage
 ```
 
-## Quick Start
+| Import | Contents |
+| --- | --- |
+| `@statewalker/webrun-content-store` | `createContentStore` and the types `ContentStore`, `ContentStoreDeps`, `ContentStoreOptions`, `ObjectDescriptor`, `ChunkRef`, `ObjectId`, `ChunkId`, `CdcParams`, `ByteStream`. ESM, runs in browsers, Node and workers. |
+
+`createContentStore(deps, opts?)`:
+
+- `deps`: `{ chunks: BlobStore, manifests: BlobStore, hashContent }`.
+- `opts`: `{ chunkThreshold?, cdc? }`. Defaults: `chunkThreshold` 4096 bytes,
+  `cdc` `{ min: 2048, avg: 8192, max: 32768 }`.
+
+The returned `ContentStore`:
+
+| Level | Methods |
+| --- | --- |
+| Object | `put(content)` returns `{ id, size, chunks }`; `read(id, { offset?, length? }?)`; `has(id)`; `getManifest(id)`; `remove(id)` |
+| Chunk | `hasChunks(ids)` returns the ids that are **not** stored; `putChunk(id, bytes)`; `getChunk(id)` |
+| Maintenance | `gc(liveRoots)` returns `{ removedObjects, removedChunks }` |
+
+## Examples
+
+Store, read back and slice an object:
 
 ```typescript
 import { createHash } from "node:crypto";
@@ -26,43 +53,69 @@ async function sha256(bytes: AsyncIterable<Uint8Array>): Promise<string> {
   for await (const chunk of bytes) h.update(chunk);
   return `sha256:${h.digest("hex")}`;
 }
+async function* streamOf(bytes: Uint8Array) {
+  yield bytes;
+}
 
-const store = createContentStore(
-  { chunks: memBlobStore(), manifests: memBlobStore(), hashContent: sha256 },
-  { chunkThreshold: 64, cdc: { min: 64, avg: 256, max: 1024 } },
-);
+const store = createContentStore({
+  chunks: memBlobStore(),
+  manifests: memBlobStore(),
+  hashContent: sha256,
+});
 
-async function* streamOf(bytes: Uint8Array) { yield bytes; }
-
-// Object level: chunk + hash in one bounded-memory pass.
-const d = await store.put(streamOf(payload)); // ObjectDescriptor { id, size, chunks }
-const whole = store.read(d.id);               // reassembled stream
-const slice = store.read(d.id, { offset: 3000, length: 2500 }); // arbitrary range across chunks
-
-// Chunk level: negotiate and move only what a peer is missing.
-const missing = await store.hasChunks(d.chunks.map((c) => c.id)); // ids NOT present
-await store.gc([d.id]); // sweep everything not reachable from the live roots
+const payload = new Uint8Array(100_000).map((_, i) => (i * 7919) % 251);
+const d = await store.put(streamOf(payload)); // { id, size: 100000, chunks: [...] }
+const whole = store.read(d.id);
+const slice = store.read(d.id, { offset: 30_000, length: 2_500 }); // crosses chunk borders
 ```
 
-## API
+Find what a peer is missing, and clean up:
 
-**Object level**
-- `put(content): Promise<ObjectDescriptor>` — chunk + hash in a bounded-memory pass, store chunks + manifest.
-- `read(id, range?)` — stream the object's bytes, optionally sliced by `{ offset?, length? }`; empty stream if absent.
-- `has(id)`, `getManifest(id)`, `remove(id)`.
+```typescript
+const missing = await store.hasChunks(d.chunks.map((c) => c.id)); // [] here: all present
+await store.remove(d.id); // removes the manifest only
+await store.gc([]); // no live roots: removes every remaining object and chunk
+```
 
-**Chunk level** (transfer / dedup)
-- `hasChunks(ids): Promise<ChunkId[]>` — return exactly the ids **not** present.
-- `putChunk(id, bytes)`, `getChunk(id)`.
+## Internals
 
-**Maintenance**
-- `gc(liveRoots): Promise<{ removedObjects, removedChunks }>` — mark-sweep from caller-supplied roots.
+### How content is cut into chunks
 
-**Factory:** `createContentStore(deps, opts?)`, where `deps` is `{ chunks: BlobStore, manifests: BlobStore, hashContent }` and `opts` is `{ chunkThreshold?, cdc? }`. Types: `ContentStore`, `ObjectDescriptor`, `ChunkRef`, `ObjectId`, `ChunkId`, `CdcParams`.
+```
+bytes ──> Gear rolling hash ──> cut where low bits are zero ──> chunks (min..max bytes)
+            (restarts at every cut)        (stricter mask below avg, looser above)
+```
 
-## Notes
+The chunker is a minimal FastCDC: a Gear rolling fingerprint that restarts at each boundary, with
+normalized masks that pull chunk sizes toward `avg`. Because a cut depends only on the bytes since
+the previous cut, boundaries re-synchronise shortly after an insert or delete, and the chunks
+around the edit keep their ids. Content strictly smaller than `chunkThreshold` is stored as one
+chunk; chunking small files only adds manifest overhead.
 
-- **Injected hash, opaque ids.** The contract sketch spoke of intrinsic BLAKE3; the shipped code takes an injected `hashContent` and treats every id as opaque — the store commits to no algorithm, and object/chunk ids simply carry the hasher's own prefix.
-- **CDC + direct-blob threshold.** Content-defined chunking (so dedup survives inserts/shifts) is the default; content strictly below `chunkThreshold` is stored as a single blob with no chunking overhead. `hasChunks`/`getChunk`/`putChunk` let `content-transfer` move only missing chunks.
-- **Immutable + external liveness.** Chunks and objects are immutable and content-addressed; there are no refcounts — `gc(liveRoots)` reaches objects→chunks from caller roots and sweeps the rest.
-- Built red/green TDD.
+### Memory stays bounded
+
+`put` reads the input one chunk at a time. The whole-object id is computed by re-streaming the
+stored chunks in order through `hashContent`, so an object is never held in memory in one piece.
+`read` with a range skips chunks outside the range.
+
+### Ids are opaque
+
+Object and chunk ids are whatever `hashContent` returns, including any prefix such as `sha256:`.
+The store commits to no algorithm. Use the same `hashContent` for every store that exchanges
+chunks; ids from different hashes never match.
+
+### Liveness is external
+
+There are no reference counts. `remove(id)` deletes only the manifest: chunks stay, because
+another object may share them. `gc(liveRoots)` marks every chunk reachable from the manifests you
+list and deletes all other manifests and chunks. Anything not in `liveRoots` is removed, so pass
+the complete set of objects you still need.
+
+### Dependencies
+
+`@statewalker/webrun-storage`, for the `BlobStore` type. `@statewalker/webrun-files` is declared in
+`package.json` but not imported by the sources. The chunker and manifest format are in-package. No runtime dependencies.
+
+## License
+
+MIT
