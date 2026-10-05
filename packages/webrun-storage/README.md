@@ -1,71 +1,107 @@
 # @statewalker/webrun-storage
 
-Domain-neutral byte-persistence seam: an immutable content-addressed `BlobStore` and a mutable `KvStore` with atomic compare-and-set.
+## What it is
 
-## Overview
+A small byte-persistence layer with two primitives: an immutable `BlobStore` keyed by a
+caller-supplied id, and a mutable `KvStore` with atomic compare-and-set. A `RefStore` facade
+stores string ids on top of a `KvStore`. Adapters are included for memory and for any
+`FilesApi` from `@statewalker/webrun-files`.
 
-This package defines two small primitives and one facade. A `BlobStore` is immutable and keyed by a caller-supplied id; it supports ranged reads and reports byte `size`. A `KvStore` is mutable and keyed, with an atomic `cas`. `RefStore` is a typed string facade over a `KvStore`. The package stores bytes only. It knows nothing of git objects, chunks or hashing: the caller owns every id.
+## Why it exists
 
-It ships an in-memory adapter and an adapter over any `@statewalker/webrun-files` `FilesApi`. `@statewalker/webrun-content-store` and `@statewalker/vcs-core` build on it.
+Higher layers (a chunked content store, a git object store, ref tables) all need the same two
+things from a backend: write an immutable blob under a known id, and update a pointer atomically.
+This package defines exactly that contract and nothing more. A new backend (SQL, KV, cloud
+object storage) implements two interfaces, and every layer above works on it unchanged.
 
-## Installation
+## How to use
 
 ```bash
 pnpm add @statewalker/webrun-storage
 ```
 
-No peer dependencies. Depends on `@statewalker/webrun-files` (types and the `FilesApi` contract).
-
-## Entry points
-
 | Import | Contents |
 | --- | --- |
-| `@statewalker/webrun-storage` | Everything listed under [API](#api). ESM only, environment-neutral (browser, Node, workers). |
+| `@statewalker/webrun-storage` | `memBlobStore`, `memKvStore`, `filesBlobStore`, `refStore`, and the types `BlobStore`, `KvStore`, `RefStore`, `ObjectStore`, `ByteStream`, `FilesBlobStoreOptions`. ESM, runs in browsers, Node and workers. |
 
-The package ships built JS and `.d.ts` in `dist/` and the TypeScript sources in `src/`.
+`BlobStore`:
 
-## Quick start
+- `put(id, bytes, opts?)`: stores a byte stream. Re-putting the same id is idempotent.
+  `opts.verify(bytes)` re-derives the id; on mismatch `put` rejects and stores nothing.
+- `get(id, range?)`: byte stream; `range` is `{ start?, end? }` with `end` exclusive. An absent id
+  yields an empty stream.
+- `has(id)`, `remove(id)` (resolves `false` if absent), `size(id)` (`-1` if absent),
+  `list(prefix?)`.
+
+`KvStore`: `get`, `put`, `remove`, `list(prefix?)`, and `cas(key, expected, next)`, which writes
+and returns `true` only when the current value equals `expected` byte for byte. `expected ===
+undefined` means "must not exist"; `next === undefined` deletes.
+
+`RefStore`: `read(name)`, `compareAndSet(name, expected, next)`, `list(prefix?)`, all with string
+ids. `ObjectStore` is an alias of `BlobStore`.
+
+## Examples
+
+Blobs in memory and over a `FilesApi`:
 
 ```typescript
 import { MemFilesApi } from "@statewalker/webrun-files-mem";
-import { filesBlobStore, memBlobStore, memKvStore, refStore } from "@statewalker/webrun-storage";
-
-// Immutable, content-addressed blobs (in memory, or over any FilesApi):
-const blobs = memBlobStore();
-const overFiles = filesBlobStore(new MemFilesApi(), { root: "/objects" });
+import { filesBlobStore, memBlobStore } from "@statewalker/webrun-storage";
 
 async function* streamOf(...parts: string[]) {
   for (const p of parts) yield new TextEncoder().encode(p);
 }
 
-await blobs.put("a1", streamOf("hello ", "world")); // the caller owns the id
-await blobs.has("a1"); // true
-await blobs.size("a1"); // 11, or -1 if absent
-const tail = blobs.get("a1", { start: 6 }); // ranged read -> "world"
+const blobs = memBlobStore();
+await blobs.put("a1b2c3", streamOf("hello ", "world")); // the caller owns the id
+await blobs.size("a1b2c3"); // 11
+const tail = blobs.get("a1b2c3", { start: 6 }); // "world"
 
-// Mutable KV with atomic compare-and-set, and the ref facade over it:
-const kv = memKvStore();
-const created = await kv.cas("head", undefined, new TextEncoder().encode("v1")); // true (create)
-
-const refs = refStore(kv);
-await refs.compareAndSet("refs/heads/main", undefined, "commit-1");
-const id = await refs.read("refs/heads/main"); // "commit-1"
+const onDisk = filesBlobStore(new MemFilesApi(), { root: "/objects" });
+await onDisk.put("a1b2c3", streamOf("hello")); // stored at /objects/a1/b2c3
 ```
 
-## API
+Atomic pointer updates:
 
-- **`BlobStore`**: `put(id, bytes, opts?)` (streaming; `opts.verify` re-derives the id from the bytes and rejects on mismatch), `get(id, range?)` with `{ start?, end? }` (`end` exclusive; empty stream if absent), `has(id)`, `remove(id)`, `size(id)` (`-1` when absent), `list(prefix?)`. Re-putting the same id is idempotent. `ObjectStore` is an alias.
-- **`KvStore`**: `get`, `put`, `remove`, `list(prefix?)`, plus `cas(key, expected, next)`. `cas` writes and returns `true` only if the current value equals `expected` byte by byte; `next === undefined` deletes.
-- **`RefStore`**: string-id facade over a `KvStore`: `read`, `compareAndSet`, `list`.
-- **Adapters and facade**: `memBlobStore()`, `memKvStore()`, `filesBlobStore(files, opts?)` (`opts.root`, default `/`; blobs are stored at `<root>/<id[0..2]>/<id[2..]>`), `refStore(kv)`.
-- Types: `BlobStore`, `KvStore`, `RefStore`, `ObjectStore`, `ByteStream`, `FilesBlobStoreOptions`.
+```typescript
+import { memKvStore, refStore } from "@statewalker/webrun-storage";
 
-## Notes
+const refs = refStore(memKvStore());
+await refs.compareAndSet("refs/heads/main", undefined, "commit-1"); // true: created
+await refs.compareAndSet("refs/heads/main", "commit-0", "commit-2"); // false: lost the race
+await refs.read("refs/heads/main"); // "commit-1"
+```
 
-- **Hash-agnostic.** `put(id, ...)` takes the id from the caller. `webrun-content-store` hashes chunks; `vcs-core` computes git object ids. Integrity checking is an optional caller-supplied `verify` on `put`.
-- **CAS is required**, so `RefStore` always gets atomic compare-and-set.
-- **One backend object per blob.** Packing and chunk grouping live in the layers above.
-- The same behavioural test suite runs against the memory and files adapters.
+## Internals
+
+### Ids belong to the caller
+
+`put` never hashes. A git store passes git object ids, a chunk store passes its own chunk hashes.
+The package therefore depends on no hash library and works with any id scheme. Integrity checking
+is opt-in through `verify`; a mismatch fails with
+`blob id mismatch: supplied "<id>", verify computed "<computed>"`.
+
+### Compare-and-set is part of the contract
+
+`cas` is a required method, not an optional capability, so `RefStore` can always offer atomic
+updates without checking what the backend supports. The in-memory adapter is atomic because
+JavaScript runs it in one turn.
+
+### One backend object per blob
+
+`filesBlobStore` writes each blob to its own file, sharded like git's loose objects:
+`<root>/<first two chars>/<rest>`. Ids shorter than three characters produce odd paths; use
+hash-like ids. Packing and chunk grouping are left to the layers above.
+
+### Ranged reads
+
+`get(id, { start, end })` matches the usual "inclusive start, exclusive end" slice convention, so
+random access into pack files and large blobs needs no full read.
+
+### Dependencies
+
+Only `@statewalker/webrun-files`, for the `FilesApi` type used by `filesBlobStore`. No runtime
+dependencies.
 
 ## License
 
