@@ -1,6 +1,6 @@
 {
   "name": "@statewalker/webrun-storage",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Domain-neutral byte-persistence seam (BlobStore + KvStore with CAS) over the webrun-files FilesApi",
   "bugs": {
     "url": "https://github.com/statewalker/webrun-sync/issues"

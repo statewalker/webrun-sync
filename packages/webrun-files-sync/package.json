@@ -1,6 +1,6 @@
 {
   "name": "@statewalker/webrun-files-sync",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "rclone-like file-synchronisation engine (copy/sync/bisync/move/check) over the webrun-files FilesApi",
   "bugs": {
     "url": "https://github.com/statewalker/webrun-sync/issues"

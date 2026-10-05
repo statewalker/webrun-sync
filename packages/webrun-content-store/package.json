@@ -1,6 +1,6 @@
 {
   "name": "@statewalker/webrun-content-store",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Domain-neutral, content-addressed large-object store with content-defined chunking over the storage BlobStore",
   "bugs": {
     "url": "https://github.com/statewalker/webrun-sync/issues"
