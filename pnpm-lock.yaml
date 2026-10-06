@@ -13,13 +13,13 @@ catalogs:
       specifier: ^3.0.3
       version: 3.0.3
     '@statewalker/webrun-files':
-      specifier: ^0.10.2
+      specifier: ^0.10.0
       version: 0.10.2
     '@statewalker/webrun-files-mem':
-      specifier: ^0.10.3
+      specifier: ^0.10.0
       version: 0.10.3
     '@statewalker/webrun-streams':
-      specifier: ^0.2.2
+      specifier: ^0.2.0
       version: 0.2.2
     '@types/node':
       specifier: ^26.6.4

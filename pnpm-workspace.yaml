@@ -1,13 +1,13 @@
 packages:
-  - packages/*
+  - "packages/*"
 
 catalog:
-  '@biomejs/biome': ^2.5.15
-  '@changesets/cli': ^3.0.3
-  '@statewalker/webrun-files': ^0.10.2
-  '@statewalker/webrun-files-mem': ^0.10.3
-  '@statewalker/webrun-streams': ^0.2.2
-  '@types/node': ^26.6.4
+  "@changesets/cli": ^3.0.3
+  "@statewalker/webrun-streams": "^0.2.0"
+  "@biomejs/biome": ^2.5.15
+  "@statewalker/webrun-files": "^0.10.0"
+  "@statewalker/webrun-files-mem": "^0.10.0"
+  "@types/node": ^26.6.4
   rolldown: ^1.2.12
   typescript: ^7.0.2
   vitest: ^5.0.3
