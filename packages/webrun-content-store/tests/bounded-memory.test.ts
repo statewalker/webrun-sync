@@ -27,6 +27,7 @@ describe("content-store bounded memory", () => {
       },
       has: (id) => inner.has(id),
       remove: (id) => inner.remove(id),
+      size: (id) => inner.size(id),
       list: (prefix) => inner.list(prefix),
     };
 

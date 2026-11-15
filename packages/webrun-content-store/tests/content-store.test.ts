@@ -14,6 +14,7 @@ function countingChunks(inner: BlobStore): { store: BlobStore; puts: () => numbe
     get: (id) => inner.get(id),
     has: (id) => inner.has(id),
     remove: (id) => inner.remove(id),
+    size: (id) => inner.size(id),
     list: (prefix) => inner.list(prefix),
   };
   return { store, puts: () => puts };

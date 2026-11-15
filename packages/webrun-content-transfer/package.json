@@ -39,7 +39,8 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "format:fix": "biome check --write --unsafe .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "typecheck:tests": "tsc -p tsconfig.tests.json"
   },
   "dependencies": {
     "@statewalker/webrun-files": "catalog:",
