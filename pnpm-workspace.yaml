@@ -5,8 +5,8 @@ catalog:
   "@changesets/cli": ^3.0.3
   "@statewalker/webrun-streams": "^0.2.0"
   "@biomejs/biome": ^2.5.15
-  "@statewalker/webrun-files": "^0.10.0"
-  "@statewalker/webrun-files-mem": "^0.10.0"
+  "@statewalker/webrun-files": "^0.12.0"
+  "@statewalker/webrun-files-mem": "^0.12.0"
   "@types/node": ^26.6.4
   rolldown: ^1.2.12
   typescript: ^7.0.2
