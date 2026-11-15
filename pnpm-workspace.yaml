@@ -3,7 +3,7 @@ packages:
 
 catalog:
   "@changesets/cli": ^3.0.3
-  "@statewalker/webrun-streams": "^0.2.0"
+  "@statewalker/webrun-streams": "^0.6.0"
   "@biomejs/biome": ^2.5.15
   "@statewalker/webrun-files": "^0.12.0"
   "@statewalker/webrun-files-mem": "^0.12.0"

@@ -19,8 +19,8 @@ catalogs:
       specifier: ^0.12.0
       version: 0.12.0
     '@statewalker/webrun-streams':
-      specifier: ^0.2.0
-      version: 0.2.3
+      specifier: ^0.6.0
+      version: 0.6.0
     '@types/node':
       specifier: ^26.6.4
       version: 26.6.4
@@ -89,7 +89,7 @@ importers:
         version: 0.12.0
       '@statewalker/webrun-streams':
         specifier: 'catalog:'
-        version: 0.2.3
+        version: 0.6.0
     devDependencies:
       '@statewalker/webrun-files-mem':
         specifier: 'catalog:'
@@ -551,8 +551,8 @@ packages:
   '@statewalker/webrun-files@0.12.0':
     resolution: {integrity: sha512-8Ygw0JjouDAJ2nNXx8plZkZQ/Pesfdmdtrsyi97sArvjAmzyZ4xZ2e3eyqXEt4MUlc6oG4Q7bVnOvzzQpVWMaA==}
 
-  '@statewalker/webrun-streams@0.2.3':
-    resolution: {integrity: sha512-v4+32VDLjt8HzAhjgd7K3bgiasQosU7FooXhLaTU2dQzYyNZ6NbNMOI/24SL0bdmTHkSU3bxktASn0hO3sCwng==}
+  '@statewalker/webrun-streams@0.6.0':
+    resolution: {integrity: sha512-o+B7i9UD/VnyWpR5zsAPmMunSgMSMPDOnLMjvloSouoKtFzaHYhbPWoHoWvBLtBPuBW/IoletogYjV0ea2bPWQ==}
 
   '@tybys/wasm-util@0.10.4':
     resolution: {integrity: sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A==}
@@ -1323,7 +1323,7 @@ snapshots:
 
   '@statewalker/webrun-files@0.12.0': {}
 
-  '@statewalker/webrun-streams@0.2.3': {}
+  '@statewalker/webrun-streams@0.6.0': {}
 
   '@tybys/wasm-util@0.10.4':
     dependencies:
