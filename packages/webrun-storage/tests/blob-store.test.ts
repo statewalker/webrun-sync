@@ -126,3 +126,27 @@ describe("filesBlobStore sharding", () => {
     expect(await collect(store.get("abcdef123"))).toEqual(bytes("z"));
   });
 });
+
+describe("filesBlobStore id validation", () => {
+  // webrun-files 0.12 resolves `..` segments before any mount or guard sees a
+  // path, so an id that smuggles `/` or a `..` shard would land outside `root`.
+  const escaping = ["..x/../manifests/ab/cd", "..abcd", ".", "ab..", "ab/cd", "a\\b", ""];
+
+  for (const id of escaping) {
+    it(`rejects ${JSON.stringify(id)} without touching anything outside root`, async () => {
+      const files = new MemFilesApi();
+      const store = filesBlobStore(files, { root: "/chunks" });
+      await expect(store.put(id, streamOf("x"))).rejects.toThrow(/Invalid blob id/);
+      await expect(store.has(id)).rejects.toThrow(/Invalid blob id/);
+      expect(await files.exists("/manifests/ab/cd")).toBe(false);
+    });
+  }
+
+  it("still accepts a plain content hash", async () => {
+    const files = new MemFilesApi();
+    const store = filesBlobStore(files, { root: "/chunks" });
+    const id = await sha256(streamOf("x"));
+    await store.put(id, streamOf("x"));
+    expect(await collectText(store.get(id))).toBe("x");
+  });
+});

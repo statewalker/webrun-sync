@@ -7,6 +7,8 @@ export interface FilesBlobStoreOptions {
   root?: string;
 }
 
+const isDotSegment = (segment: string): boolean => segment === "." || segment === "..";
+
 /**
  * {@link BlobStore} backed by a {@link FilesApi}. Ids map to git-style sharded
  * paths (`ab/cdef…`) so a large id space never lands in one flat directory.
@@ -14,7 +16,17 @@ export interface FilesBlobStoreOptions {
 export function filesBlobStore(files: FilesApi, opts?: FilesBlobStoreOptions): BlobStore {
   const base = (opts?.root ?? "/").replace(/\/+$/, "");
 
-  const pathFor = (id: string): string => `${base}/${id.slice(0, 2)}/${id.slice(2)}`;
+  const pathFor = (id: string): string => {
+    const shard = id.slice(0, 2);
+    const rest = id.slice(2);
+    // webrun-files resolves `..` before any mount or guard sees the path, so an
+    // id carrying a separator or a dot segment would land outside `root`. Ids
+    // come from remote peers (content-transfer's serve-store), so refuse them.
+    if (id === "" || /[/\\]/.test(id) || isDotSegment(shard) || isDotSegment(rest)) {
+      throw new Error(`Invalid blob id: ${JSON.stringify(id)}`);
+    }
+    return `${base}/${shard}/${rest}`;
+  };
   const idFrom = (relative: string): string => relative.replace("/", "");
 
   return {
